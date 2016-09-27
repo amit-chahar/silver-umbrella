@@ -27,6 +27,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 
 #include "nordic_common.h"
 #include "nrf.h"
@@ -118,6 +119,9 @@ static void advertising_start(void);
 #define MAIN_HASH_LEN (3)
 #define MAIN_ADDR_LEN (6)
 
+#define APP_TIMER_MAX_TIMERS	1
+APP_TIMER_DEF(m_app_timer_id);
+
 uint32_t AES_ECB_BLOCK_SIZE = 16;
 //uint8_t p_ecb_key[] = {0x1D, 0x15, 0xF2, 0x0C, 0x35, 0x67, 0xB3, 0x23, 0xED, 0xA9, 0xEB, 0x15, 0x40, 0x00, 0x70, 0xFC};
 uint8_t p_ecb_key[16] = "E28D747923AD327F";
@@ -137,6 +141,16 @@ void print_uint8_arr_hex(char * log_st, uint8_t *arr, uint32_t len){
 		SEGGER_RTT_printf(0, "%02x", arr[i]);
 	}
 	SEGGER_RTT_printf(0, "\n");
+}
+
+uint32_t ticks_to_secs(uint32_t ticks){
+	float seconds = (float)ticks / (APP_TIMER_CLOCK_FREQ);
+	return seconds;  //returned as uint32_t because RTT printf doesn't support printing floats
+}
+
+uint32_t ticks_to_ms(uint32_t ticks){
+	//ceil function is used to take upper limit
+	return ceil(((ticks * 1.0) / (APP_TIMER_CLOCK_FREQ)) * 1000);
 }
 
 //Same hash generation function is also present in id_manager.c 
@@ -170,9 +184,9 @@ void generate_hash(uint8_t const * p_k, uint8_t const * p_r, uint8_t * p_hash)
 
 void RPA_generation(){
 	uint32_t err_code;
-	uint8_t pool_capacity;
-	sd_rand_application_pool_capacity_get(&pool_capacity);
-	SEGGER_RTT_printf(0, "Random pool capacity : %u\n", pool_capacity);
+	//uint8_t pool_capacity;
+	//sd_rand_application_pool_capacity_get(&pool_capacity);
+	//SEGGER_RTT_printf(0, "Random pool capacity : %u\n", pool_capacity);
 	uint8_t bytes_available, MAX_DELAY, total_delay;
 	MAX_DELAY = 100;
 	total_delay = 0;
@@ -190,28 +204,28 @@ void RPA_generation(){
 				total_delay++;
 			}
 	}
-	SEGGER_RTT_printf(0, "Random bytes available : %u, time elapsed in random generation (delay) : %u ms\n", bytes_available, total_delay*2);
+	SEGGER_RTT_printf(0, "Random bytes available in pool : %u, time elapsed in prand generation (delay) : %u ms\n", bytes_available, total_delay*2);
 	
 	uint8_t prand[MAIN_PRAND_LEN];
 	err_code = sd_rand_application_vector_get(prand, MAIN_PRAND_LEN);
 	//SEGGER_RTT_printf(0, "prand : %u %u %u\n", prand[0], prand[1], prand[2]);
-	SEGGER_RTT_printf(0, "hex prand : %x%x%x\n", prand[0], prand[1], prand[2]);
+	//SEGGER_RTT_printf(0, "hex prand : %x%x%x\n", prand[0], prand[1], prand[2]);
 	
 	//change to little endian format
 	uint8_t prand_le[MAIN_PRAND_LEN];
 	for(uint32_t i = 0; i < MAIN_PRAND_LEN; i++){
 		prand_le[i] = prand[3 - 1 - i];
 	}
-	SEGGER_RTT_printf(0, "prand_le : %x%x%x\n", prand_le[0], prand_le[1], prand_le[2]);
+	//SEGGER_RTT_printf(0, "prand_le : %x%x%x\n", prand_le[0], prand_le[1], prand_le[2]);
 	
 	//set two most significant bits to 0 and 1
 	prand_le[2] &= 0xfe;
 	prand_le[2] |= 0x02;
-	SEGGER_RTT_printf(0, "prand_le after setting bits : %x%x%x\n", prand_le[0], prand_le[1], prand_le[2]);
+	//SEGGER_RTT_printf(0, "prand_le after setting bits : %x%x%x\n", prand_le[0], prand_le[1], prand_le[2]);
 	
 	uint8_t hash[MAIN_HASH_LEN];
 	generate_hash(IRK, prand_le, hash);
-	SEGGER_RTT_printf(0, "Generated hash : %x%x%x\n", hash[0], hash[1], hash[2]);
+	//SEGGER_RTT_printf(0, "Generated hash : %x%x%x\n", hash[0], hash[1], hash[2]);
 	
 	//merge hash and prand to generate address
 	uint8_t rpa[MAIN_ADDR_LEN];
@@ -219,6 +233,34 @@ void RPA_generation(){
 	memcpy(&rpa[MAIN_HASH_LEN], prand_le, MAIN_PRAND_LEN);
 
 	SEGGER_RTT_printf(0, "Generated RPA : %x%x%x%x%x%x\n", rpa[0], rpa[1], rpa[2], rpa[3], rpa[4], rpa[5]);
+	
+	//set the newly generated address
+	//ble_gap_addr_t new_add ;
+	//new_add.addr_type=BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE;
+	//for(uint32_t j = 0; j < BLE_GAP_ADDR_LEN; j++){  
+		//new_add.addr[j] = rpa[j];
+	//}
+	//err_code = sd_ble_gap_address_set(BLE_GAP_ADDR_CYCLE_MODE_NONE, &new_add);
+	//APP_ERROR_CHECK(err_code);
+}
+
+void cal_RPA_gen_time(){
+	uint32_t RPA_gen_start, RPA_gen_end, RPA_gen_time_ticks, RPA_gen_time_ms, err_code;
+	
+	for(uint32_t i = 0; i < 5; i++){
+		nrf_delay_ms(5000);
+		SEGGER_RTT_printf(0, "\nTest iteration : %u\n\n", i);
+		RPA_gen_start = app_timer_cnt_get();
+		RPA_generation();
+		RPA_gen_end = app_timer_cnt_get();
+		err_code = app_timer_cnt_diff_compute(RPA_gen_end, RPA_gen_start, &RPA_gen_time_ticks);
+		APP_ERROR_CHECK(err_code);
+		RPA_gen_time_ms = ticks_to_ms(RPA_gen_time_ticks);
+		//SEGGER_RTT_printf(0, "RPA gen ticks : %u\n", RPA_gen_start);
+		//SEGGER_RTT_printf(0, "RPA gen ticks : %u\n", RPA_gen_end);
+		//SEGGER_RTT_printf(0, "RPA gen ticks : %u\n", RPA_gen_time_ticks);
+		SEGGER_RTT_printf(0, "RPA gen time : %u ms\n", RPA_gen_time_ms);
+	}
 }
 
 void RPA_config(){
@@ -250,15 +292,15 @@ void aes_ecb_encryption(uint8_t * p_cleartext, uint8_t * p_cipehertext){
 	memcpy(m_ecb_data.key,       key,   SOC_ECB_KEY_LENGTH);
 	memcpy(m_ecb_data.cleartext, p_cleartext, SOC_ECB_CLEARTEXT_LENGTH);
 	
-	print_uint8_arr_hex("ecb key (hex) : ", m_ecb_data.key, 16);
-	print_uint8_arr_str("ecb cleartext (str) : ", m_ecb_data.cleartext, 16);
-	print_uint8_arr_hex("ecb cleartext (hex) : ", m_ecb_data.cleartext, 16);
+	//print_uint8_arr_hex("ecb key (hex) : ", m_ecb_data.key, 16);
+	//print_uint8_arr_str("ecb cleartext (str) : ", m_ecb_data.cleartext, 16);
+	//print_uint8_arr_hex("ecb cleartext (hex) : ", m_ecb_data.cleartext, 16);
 
 	err_code = sd_ecb_block_encrypt(&m_ecb_data);
 	APP_ERROR_CHECK(err_code);
 	
 	memcpy(p_cipehertext, &m_ecb_data.ciphertext[0], SOC_ECB_CIPHERTEXT_LENGTH);
-	print_uint8_arr_hex("ecb ciphertext (hex) : ", m_ecb_data.ciphertext, 16);
+	//print_uint8_arr_hex("ecb ciphertext (hex) : ", m_ecb_data.ciphertext, 16);
 }
 
 void manu_data_set(ble_advdata_t * p_advdata){
@@ -425,6 +467,10 @@ static void pm_evt_handler(pm_evt_t const * p_evt)
     }
 }
 
+static void timer_timeout_handler(void * p_context)
+{
+    SEGGER_RTT_printf(0, "\n\nTimer Expired\n\n");
+}
 
 /**@brief Function for the Timer initialization.
  *
@@ -435,16 +481,18 @@ static void timers_init(void)
 
     // Initialize timer module.
     APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, false);
-
+		
     // Create timers.
 
     /* YOUR_JOB: Create any timers to be used by the application.
                  Below is an example of how to create a timer.
                  For every new timer needed, increase the value of the macro APP_TIMER_MAX_TIMERS by
                  one.
-       uint32_t err_code;
-       err_code = app_timer_create(&m_app_timer_id, APP_TIMER_MODE_REPEATED, timer_timeout_handler);
-       APP_ERROR_CHECK(err_code); */
+		*/
+		uint32_t err_code;
+		err_code = app_timer_create(&m_app_timer_id, APP_TIMER_MODE_SINGLE_SHOT, timer_timeout_handler);
+    APP_ERROR_CHECK(err_code);
+		SEGGER_RTT_printf(0, "Timer Created\n");
 }
 
 
@@ -480,7 +528,7 @@ static void gap_params_init(void)
     err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
     APP_ERROR_CHECK(err_code);
 																					
-		RPA_config();
+		//RPA_config();
 }
 
 
@@ -598,11 +646,10 @@ static void conn_params_init(void)
  */
 static void application_timers_start(void)
 {
-    /* YOUR_JOB: Start your timers. below is an example of how to start a timer.
-       uint32_t err_code;
-       err_code = app_timer_start(m_app_timer_id, TIMER_INTERVAL, NULL);
-       APP_ERROR_CHECK(err_code); */
-
+    uint32_t err_code;
+    err_code = app_timer_start(m_app_timer_id, APP_TIMER_TICKS(100000, APP_TIMER_PRESCALER), NULL);
+    APP_ERROR_CHECK(err_code);
+		SEGGER_RTT_printf(0, "Timer Started\n\n");
 }
 
 
@@ -1003,8 +1050,6 @@ int main(void)
     advertising_init();
     //services_init();
     //conn_params_init();
-
-		RPA_generation();
 		
     // Start execution.
     NRF_LOG_INFO("Template started\r\n");
@@ -1012,6 +1057,8 @@ int main(void)
     err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
 
+		cal_RPA_gen_time();
+		
     // Enter main loop.
     for (;;)
     {
