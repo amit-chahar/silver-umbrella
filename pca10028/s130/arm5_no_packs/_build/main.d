@@ -2,6 +2,7 @@
 .\_build\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
 .\_build\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdint.h
 .\_build\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
+.\_build\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\math.h
 .\_build\main.o: ..\..\..\..\..\..\components\libraries\util\nordic_common.h
 .\_build\main.o: C:\Keil_v5\ARM\PACK\NordicSemiconductor\nRF_DeviceFamilyPack\8.7.1\Device\Include\nrf.h
 .\_build\main.o: C:\Keil_v5\ARM\PACK\NordicSemiconductor\nRF_DeviceFamilyPack\8.7.1\Device\Include\nrf51.h
@@ -74,5 +75,8 @@
 .\_build\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\inttypes.h
 .\_build\main.o: ..\..\..\..\..\..\components\libraries\log\nrf_log_ctrl.h
 .\_build\main.o: ..\..\..\..\..\..\components\libraries\log\src\nrf_log_ctrl_internal.h
+.\_build\main.o: ..\..\..\..\..\..\components\drivers_nrf\delay\nrf_delay.h
 .\_build\main.o: ..\..\..\..\..\..\external\segger_rtt\SEGGER_RTT.h
 .\_build\main.o: ..\..\..\..\..\..\external\segger_rtt\SEGGER_RTT_Conf.h
+.\_build\main.o: ..\arm5_no_packs\timeslot.h
+.\_build\main.o: ..\..\..\..\..\..\components\ble\peer_manager\id_manager.h
