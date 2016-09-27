@@ -57,9 +57,11 @@
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
+#include "nrf_delay.h"
 #include "SEGGER_RTT.h"
 #include "ble_gap.h"
 #include "timeslot.h"
+#include "id_manager.h"
 
 #define IS_SRVC_CHANGED_CHARACT_PRESENT 1                                           /**< Include or not the service_changed characteristic. if not enabled, the server's database cannot be changed for the lifetime of the device*/
 
@@ -112,37 +114,115 @@ static ble_uuid_t m_adv_uuids[] = {{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUI
 
 static void advertising_start(void);
 
+#define MAIN_PRAND_LEN (3)
+#define MAIN_HASH_LEN (3)
+#define MAIN_ADDR_LEN (6)
+
 uint32_t AES_ECB_BLOCK_SIZE = 16;
 //uint8_t p_ecb_key[] = {0x1D, 0x15, 0xF2, 0x0C, 0x35, 0x67, 0xB3, 0x23, 0xED, 0xA9, 0xEB, 0x15, 0x40, 0x00, 0x70, 0xFC};
 uint8_t p_ecb_key[16] = "E28D747923AD327F";
 static const uint8_t key[16] = { 'N', 'o', 't', 'a', 'g', 'o', 'o', 'd', 'p', 'a', 's', 's', 'w', 'o', 'r', 'd' };
 static const uint8_t IRK[16] = { 'N', 'o', 't', 'a', 'g', 'o', 'o', 'd', 'p', 'a', 's', 's', 'w', 'o', 'r', 'd' };
-uint16_t APP_ADDR_REFRESH_S = 10;
-/*
-void print_bool_result(bool result){
-	if(result == 1){
-		SEGGER_RTT_WriteString(0, "success");
-	} else {
-		SEGGER_RTT_WriteString(0, "failed");
-	}
+
+void print_uint8_arr_str(char * log_st, uint8_t *arr, uint32_t len){
+	char str[len + 1];
+	memcpy(str, arr, len);
+	str[len] = 0;
+	SEGGER_RTT_printf(0, "%s%s\n",log_st, str);
 }
 
-void print_string(char * log){
-	SEGGER_RTT_WriteString(0, log);
+void print_uint8_arr_hex(char * log_st, uint8_t *arr, uint32_t len){
+	SEGGER_RTT_printf(0, "%s",log_st);
+	for(uint32_t i = 0; i < len; i++){
+		SEGGER_RTT_printf(0, "%02x", arr[i]);
+	}
+	SEGGER_RTT_printf(0, "\n");
 }
-*/
-void print_concat(char * st1, char * st2){
-	uint32_t buffer_size = 100;
-	char cst[buffer_size];
-	memset(cst, 0, buffer_size);
-	strcat(cst, st1);
-	//strcat(cst, " : ");
-	strcat(cst, st2);
-	strcat(cst, "\n");
-	SEGGER_RTT_WriteString(0, cst);
+
+//Same hash generation function is also present in id_manager.c 
+//but we are using our function to see debug statements, if required, using JLINK 
+
+void generate_hash(uint8_t const * p_k, uint8_t const * p_r, uint8_t * p_hash)
+{
+    nrf_ecb_hal_data_t ecb_hal_data;
+
+    for (uint32_t i = 0; i < SOC_ECB_KEY_LENGTH; i++)
+    {
+        ecb_hal_data.key[i] = p_k[SOC_ECB_KEY_LENGTH - 1 - i];
+    }
+
+    memset(ecb_hal_data.cleartext, 0, SOC_ECB_KEY_LENGTH - MAIN_PRAND_LEN);
+
+    for (uint32_t i = 0; i < MAIN_PRAND_LEN; i++)
+    {
+        ecb_hal_data.cleartext[SOC_ECB_KEY_LENGTH - 1 - i] = p_r[i];
+    }
+
+    // Can only return NRF_SUCCESS.
+    (void) sd_ecb_block_encrypt(&ecb_hal_data);
+
+    for (uint32_t i = 0; i < MAIN_HASH_LEN; i++)
+    {
+        p_hash[i] = ecb_hal_data.ciphertext[SOC_ECB_KEY_LENGTH - 1 - i];
+    }
+}
+
+
+void RPA_generation(){
+	uint32_t err_code;
+	uint8_t pool_capacity;
+	sd_rand_application_pool_capacity_get(&pool_capacity);
+	SEGGER_RTT_printf(0, "Random pool capacity : %u\n", pool_capacity);
+	uint8_t bytes_available, MAX_DELAY, total_delay;
+	MAX_DELAY = 100;
+	total_delay = 0;
+
+	while(1){
+			sd_rand_application_bytes_available_get(&bytes_available);
+			if(bytes_available > 2){
+				break;
+			} else {
+				if(total_delay == MAX_DELAY){
+					SEGGER_RTT_printf(0, "Unable to get enough random numbers\n");
+					return;
+				}
+				nrf_delay_ms(2);
+				total_delay++;
+			}
+	}
+	SEGGER_RTT_printf(0, "Random bytes available : %u, time elapsed in random generation (delay) : %u ms\n", bytes_available, total_delay*2);
+	
+	uint8_t prand[MAIN_PRAND_LEN];
+	err_code = sd_rand_application_vector_get(prand, MAIN_PRAND_LEN);
+	//SEGGER_RTT_printf(0, "prand : %u %u %u\n", prand[0], prand[1], prand[2]);
+	SEGGER_RTT_printf(0, "hex prand : %x%x%x\n", prand[0], prand[1], prand[2]);
+	
+	//change to little endian format
+	uint8_t prand_le[MAIN_PRAND_LEN];
+	for(uint32_t i = 0; i < MAIN_PRAND_LEN; i++){
+		prand_le[i] = prand[3 - 1 - i];
+	}
+	SEGGER_RTT_printf(0, "prand_le : %x%x%x\n", prand_le[0], prand_le[1], prand_le[2]);
+	
+	//set two most significant bits to 0 and 1
+	prand_le[2] &= 0xfe;
+	prand_le[2] |= 0x02;
+	SEGGER_RTT_printf(0, "prand_le after setting bits : %x%x%x\n", prand_le[0], prand_le[1], prand_le[2]);
+	
+	uint8_t hash[MAIN_HASH_LEN];
+	generate_hash(IRK, prand_le, hash);
+	SEGGER_RTT_printf(0, "Generated hash : %x%x%x\n", hash[0], hash[1], hash[2]);
+	
+	//merge hash and prand to generate address
+	uint8_t rpa[MAIN_ADDR_LEN];
+	memcpy(rpa, hash, MAIN_HASH_LEN);
+	memcpy(&rpa[MAIN_HASH_LEN], prand_le, MAIN_PRAND_LEN);
+
+	SEGGER_RTT_printf(0, "Generated RPA : %x%x%x%x%x%x\n", rpa[0], rpa[1], rpa[2], rpa[3], rpa[4], rpa[5]);
 }
 
 void RPA_config(){
+	uint16_t RPA_refresh_intvl_s = 10;
 	uint32_t err_code;
 	ble_gap_irk_t m_irk;
 	memcpy(m_irk.irk, IRK, BLE_GAP_SEC_KEY_LEN);
@@ -158,7 +238,7 @@ void RPA_config(){
 	err_code = sd_ble_gap_address_set(BLE_GAP_ADDR_CYCLE_MODE_AUTO, &gap_address);
 	APP_ERROR_CHECK(err_code);
 	opt.gap_opt.privacy.p_irk = &m_irk;
-	opt.gap_opt.privacy.interval_s = APP_ADDR_REFRESH_S;
+	opt.gap_opt.privacy.interval_s = RPA_refresh_intvl_s;
 	sd_ble_opt_set(BLE_GAP_OPT_PRIVACY, &opt);	
 }
 
@@ -169,29 +249,26 @@ void aes_ecb_encryption(uint8_t * p_cleartext, uint8_t * p_cipehertext){
 	
 	memcpy(m_ecb_data.key,       key,   SOC_ECB_KEY_LENGTH);
 	memcpy(m_ecb_data.cleartext, p_cleartext, SOC_ECB_CLEARTEXT_LENGTH);
-
-	print_concat("ecb_key", (char * ) m_ecb_data.key);
-	print_concat("cleartext", (char * ) m_ecb_data.cleartext);
 	
+	print_uint8_arr_hex("ecb key (hex) : ", m_ecb_data.key, 16);
+	print_uint8_arr_str("ecb cleartext (str) : ", m_ecb_data.cleartext, 16);
+	print_uint8_arr_hex("ecb cleartext (hex) : ", m_ecb_data.cleartext, 16);
+
 	err_code = sd_ecb_block_encrypt(&m_ecb_data);
 	APP_ERROR_CHECK(err_code);
 	
 	memcpy(p_cipehertext, &m_ecb_data.ciphertext[0], SOC_ECB_CIPHERTEXT_LENGTH);
-	print_concat("encrypted data", (char * ) m_ecb_data.ciphertext);
+	print_uint8_arr_hex("ecb ciphertext (hex) : ", m_ecb_data.ciphertext, 16);
 }
 
 void manu_data_set(ble_advdata_t * p_advdata){
 		ble_advdata_manuf_data_t        manuf_data; // Variable to hold manufacturer specific data
     uint8_t plain_data[16] = "Bengaluru"; // Our data to adverise
-		//SEGGER_RTT_WriteString(0, (char * )plain_data);
 		uint8_t enc_data[16];
 		memset(enc_data, 0, 16);
-		//bool result = nrf_ecb_crypt(enc_data, plain_data);
-		//print_bool_result(result);
 		aes_ecb_encryption(plain_data, enc_data);
 		char ps[100] = "Encrypted data : ";
 		strcat(ps, (char * )enc_data);
-		//print_string(ps);
 	
 		manuf_data.company_identifier       = 0x0059; // Nordics company ID
     manuf_data.data.p_data              = enc_data;     
@@ -927,6 +1004,8 @@ int main(void)
     //services_init();
     //conn_params_init();
 
+		RPA_generation();
+		
     // Start execution.
     NRF_LOG_INFO("Template started\r\n");
     application_timers_start();

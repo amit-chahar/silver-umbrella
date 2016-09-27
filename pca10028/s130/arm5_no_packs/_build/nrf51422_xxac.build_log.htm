@@ -22,25 +22,12 @@ Dialog DLL:      TARMCM1.DLL V1.10.0.0
  
 <h2>Project:</h2>
 C:\nRF5_SDK_12.0.0_12f24da\examples\ble_peripheral\ble_app_template\pca10028\s130\arm5_no_packs\ble_app_template_pca10028_s130.uvprojx
-Project File Date:  09/26/2016
+Project File Date:  09/27/2016
 
 <h2>Output:</h2>
 *** Using Compiler 'V5.06 update 3 (build 300)', folder: 'C:\Keil_v5\ARM\ARMCC\Bin'
 Build target 'nrf51422_xxac'
-compiling main.c...
-..\..\..\main.c(149): warning:  #550-D: variable "opt_privacy" was set but never used
-  	ble_gap_opt_privacy_t opt_privacy;
-..\..\..\main.c(110): warning:  #177-D: variable "m_adv_uuids" was declared but never referenced
-  static ble_uuid_t m_adv_uuids[] = {{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}}; /**< Universally unique service identifiers. */
-..\..\..\main.c(436): warning:  #177-D: function "services_init" was declared but never referenced
-  static void services_init(void)
-..\..\..\main.c(498): warning:  #177-D: function "conn_params_init" was declared but never referenced
-  static void conn_params_init(void)
-..\..\..\main.c: 4 warnings, 0 errors
-linking...
-Program Size: Code=27440 RO-data=612 RW-data=344 ZI-data=7704  
-FromELF: creating hex file...
-".\_build\nrf51422_xxac.axf" - 0 Error(s), 4 Warning(s).
+".\_build\nrf51422_xxac.axf" - 0 Error(s), 0 Warning(s).
 
 <h2>Software Packages used:</h2>
 
@@ -66,10 +53,10 @@ Package Vendor: NordicSemiconductor
    * Component: ARM::CMSIS:CORE:4.3.0
 
    * Component: NordicSemiconductor::Device:Startup:8.7.1
-      Source file:   Device\Source\arm\arm_startup_nrf51.s
       Source file:   Device\Source\system_nrf51.c
       Include file:  Device\Include\system_nrf51.h
-Build Time Elapsed:  00:00:05
+      Source file:   Device\Source\arm\arm_startup_nrf51.s
+Build Time Elapsed:  00:00:01
 </pre>
 </body>
 </html>

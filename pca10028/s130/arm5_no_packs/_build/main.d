@@ -74,5 +74,8 @@
 .\_build\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\inttypes.h
 .\_build\main.o: ..\..\..\..\..\..\components\libraries\log\nrf_log_ctrl.h
 .\_build\main.o: ..\..\..\..\..\..\components\libraries\log\src\nrf_log_ctrl_internal.h
+.\_build\main.o: ..\..\..\..\..\..\components\drivers_nrf\delay\nrf_delay.h
 .\_build\main.o: ..\..\..\..\..\..\external\segger_rtt\SEGGER_RTT.h
 .\_build\main.o: ..\..\..\..\..\..\external\segger_rtt\SEGGER_RTT_Conf.h
+.\_build\main.o: ..\arm5_no_packs\timeslot.h
+.\_build\main.o: ..\..\..\..\..\..\components\ble\peer_manager\id_manager.h
