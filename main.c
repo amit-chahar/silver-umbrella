@@ -77,7 +77,7 @@
 
 #define DEVICE_NAME                     "Nordic_Template"                           /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME               "NordicSemiconductor"                       /**< Manufacturer. Will be passed to Device Information Service. */
-#define APP_ADV_INTERVAL                3000                                         /**< The advertising interval (in units of 0.625 ms. 300 value corresponds to 187.5 ms). */
+#define APP_ADV_INTERVAL                2000                                         /**< The advertising interval (in units of 0.625 ms. 300 value corresponds to 187.5 ms). */
 #define APP_ADV_TIMEOUT_IN_SECONDS      180                                         /**< The advertising timeout in units of seconds. */
 
 #define APP_TIMER_PRESCALER             0                                           /**< Value of the RTC1 PRESCALER register. */
@@ -216,12 +216,13 @@ void RPA_generation(){
 	for(uint32_t i = 0; i < MAIN_PRAND_LEN; i++){
 		prand_le[i] = prand[3 - 1 - i];
 	}
-	//SEGGER_RTT_printf(0, "prand_le : %x%x%x\n", prand_le[0], prand_le[1], prand_le[2]);
+	SEGGER_RTT_printf(0, "prand_le : %x%x%x\n", prand_le[0], prand_le[1], prand_le[2]);
 	
 	//set two most significant bits to 0 and 1
-	prand_le[2] &= 0xfe;
-	prand_le[2] |= 0x02;
-	//SEGGER_RTT_printf(0, "prand_le after setting bits : %x%x%x\n", prand_le[0], prand_le[1], prand_le[2]);
+	prand_le[2] &= 0x7f;
+	prand_le[2] |= 0x40;
+	
+	SEGGER_RTT_printf(0, "prand_le after setting bits : %x%x%x\n", prand_le[0], prand_le[1], prand_le[2]);
 	
 	uint8_t hash[MAIN_HASH_LEN];
 	generate_hash(IRK, prand_le, hash);
@@ -235,13 +236,14 @@ void RPA_generation(){
 	SEGGER_RTT_printf(0, "Generated RPA : %x%x%x%x%x%x\n", rpa[0], rpa[1], rpa[2], rpa[3], rpa[4], rpa[5]);
 	
 	//set the newly generated address
-	//ble_gap_addr_t new_add ;
-	//new_add.addr_type=BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE;
-	//for(uint32_t j = 0; j < BLE_GAP_ADDR_LEN; j++){  
-		//new_add.addr[j] = rpa[j];
-	//}
-	//err_code = sd_ble_gap_address_set(BLE_GAP_ADDR_CYCLE_MODE_NONE, &new_add);
-	//APP_ERROR_CHECK(err_code);
+	ble_gap_addr_t new_add ;
+	new_add.addr_type=BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE;
+	for(uint32_t j = 0; j < BLE_GAP_ADDR_LEN; j++){  
+		new_add.addr[j] = rpa[j];
+	}
+	err_code = sd_ble_gap_address_set(BLE_GAP_ADDR_CYCLE_MODE_NONE, &new_add);
+	APP_ERROR_CHECK(err_code);
+	SEGGER_RTT_printf(0, "RPA set\n");
 }
 
 void cal_RPA_gen_time(){
@@ -478,7 +480,6 @@ static void timer_timeout_handler(void * p_context)
  */
 static void timers_init(void)
 {
-
     // Initialize timer module.
     APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, false);
 		
@@ -1037,7 +1038,7 @@ int main(void)
     err_code = NRF_LOG_INIT(NULL);
     APP_ERROR_CHECK(err_code);
 
-    timers_init();
+		timers_init();
     buttons_leds_init(&erase_bonds);
     ble_stack_init();
 		timeslot_sd_init();
